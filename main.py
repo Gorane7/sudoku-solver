@@ -4,25 +4,33 @@ import time
 
 
 class Sudoku:
-    def __init__(self):
-        file = open("sudoku.txt", "r")
-        data = file.readlines()
-        file.close()
-        amount = len(data) // 10
-        choice = random.randint(0, amount - 1)
-        data = data[choice * 10 + 1: (choice + 1) * 10]
-        self.data = [[y for y in x.strip("\n")] for x in data]
-        for line in self.data:
-            print(line)
-        for y in range(len(self.data)):
-            for x in range(len(self.data[y])):
-                if data[y][x] == "0":
-                    self.data[y][x] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-                else:
-                    self.data[y][x] = int(self.data[y][x])
-        self.counter = 0
+    def __init__(self, is_real, index=None):
+        self.is_real = is_real
+        self.state = "plausible"
+        self.action_counter = -1
+        self.dream_depth = 0
+        if self.is_real:
+            file = open("sudoku.txt", "r")
+            data = file.readlines()
+            file.close()
+            amount = len(data) // 10
+            if index is None:
+                choice = random.randint(0, amount - 1)
+            else:
+                choice = index
+            data = data[choice * 10 + 1: (choice + 1) * 10]
+            self.data = [[y for y in x.strip("\n")] for x in data]
+            for line in self.data:
+                print(line)
+            for y in range(len(self.data)):
+                for x in range(len(self.data[y])):
+                    if data[y][x] == "0":
+                        self.data[y][x] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                    else:
+                        self.data[y][x] = int(self.data[y][x])
 
     def do_horizontal_based_eliminiation(self):
+        self.action_counter += 1
         for y in range(len(self.data)):
             in_row = set()
             for x in range(len(self.data[y])):
@@ -32,9 +40,11 @@ class Sudoku:
                 if isinstance(self.data[y][x], list):
                     for el in in_row:
                         if el in self.data[y][x]:
+                            self.action_counter = 0
                             self.data[y][x].remove(el)
 
     def do_vertical_based_eliminiation(self):
+        self.action_counter += 1
         for x in range(len(self.data[0])):
             in_column = set()
             for y in range(len(self.data)):
@@ -44,9 +54,11 @@ class Sudoku:
                 if isinstance(self.data[y][x], list):
                     for el in in_column:
                         if el in self.data[y][x]:
+                            self.action_counter = 0
                             self.data[y][x].remove(el)
 
     def do_box_based_elimination(self):
+        self.action_counter += 1
         for yb in range(3):
             for xb in range(3):
                 in_box = set()
@@ -59,22 +71,81 @@ class Sudoku:
                         if isinstance(self.data[yb * 3 + y][xb * 3 + x], list):
                             for el in in_box:
                                 if el in self.data[yb * 3 + y][xb * 3 + x]:
+                                    self.action_counter = 0
                                     self.data[yb * 3 + y][xb * 3 + x].remove(el)
 
     def do_collapse(self):
+        self.action_counter += 1
         for y in range(len(self.data)):
             for x in range(len(self.data[y])):
-                if isinstance(self.data[y][x], list) and len(self.data[y][x]) == 1:
-                    self.data[y][x] = self.data[y][x][0]
+                if isinstance(self.data[y][x], list):
+                    if len(self.data[y][x]) == 1:
+                        self.action_counter = 0
+                        self.data[y][x] = self.data[y][x][0]
+                    elif len(self.data[y][x]) == 0:
+                        if self.is_real:
+                            print("That is a contradictory sudoku")
+                        self.state = "impossible"
+
+    def do_dream(self):
+        # print(f"Dreaming at level {self.dream_depth + 1}")
+        possibilities = []
+        for y in range(len(self.data)):
+            for x in range(len(self.data[y])):
+                if isinstance(self.data[y][x], list):
+                    possibilities.append((x, y))
+        if not possibilities:
+            self.state = "solved"
+            if self.is_real:
+                print("Puzzle solved successfully")
+            self.action_counter = 0
+            return
+        x, y = random.choice(possibilities)
+        chosen = random.choice(self.data[y][x])
+        dreamed_game = Sudoku(False)
+        dreamed_game.dream_depth = self.dream_depth + 1
+        dreamed_game.copy_data(self.data)
+        dreamed_game.data[y][x] = chosen
+        while dreamed_game.state == "plausible":
+            dreamed_game.do_solve_step()
+        if dreamed_game.state == "solved":
+            self.data[y][x] = chosen
+        if dreamed_game.state == "impossible":
+            self.data[y][x].remove(chosen)
+        self.action_counter = 0
+
+    def copy_data(self, real_data):
+        self.data = []
+        for y in range(len(real_data)):
+            new_row = []
+            for x in range(len(real_data[y])):
+                if isinstance(real_data[y][x], list):
+                    new_row.append([a for a in real_data[y][x]])
+                else:
+                    new_row.append(real_data[y][x])
+            self.data.append(new_row)
 
     def do_solve_step(self):
+        if self.action_counter == -1:
+            self.action_counter = 0
+            return
         possibilites = []
         possibilites.append(self.do_horizontal_based_eliminiation)
         possibilites.append(self.do_vertical_based_eliminiation)
         possibilites.append(self.do_box_based_elimination)
         possibilites.append(self.do_collapse)
-        possibilites[self.counter % len(possibilites)]()
-        self.counter += 1
+        if self.state != "impossible":
+            possibilites.append(self.do_dream)
+        if self.action_counter >= len(possibilites):
+            self.state = "impossible"
+            if self.is_real:
+                print("Don't know how to solve because no step has an effect")
+            return
+        # print(self.action_counter)
+        possibilites[self.action_counter]()
+        if self.action_counter == 0:
+            return
+        self.do_solve_step()
 
 
 class GUI:
@@ -93,14 +164,18 @@ class GUI:
         self.background_colour = (255, 255, 255)
         self.number_colour = (255, 0, 0)
         self.line_colour = (0, 0, 0)
-        self.game = Sudoku()
+        self.game = Sudoku(True, 0)
+        self.total_time_spent_solving = 0
+        self.at_puzzle = 0
+        self.total_puzzle_amount = 50
 
     def run(self):
         while self.running:
             self.get_input()
             self.compute()
-            self.render()
-            time.sleep(0.5)
+            if random.random() < 0.1:
+                self.render()
+            # time.sleep(0.01)
 
     def get_input(self):
         for event in pygame.event.get():
@@ -119,7 +194,16 @@ class GUI:
                     self.game.do_collapse()
 
     def compute(self):
-        self.game.do_solve_step()
+        if self.game.state == "plausible":
+            self.total_time_spent_solving -= time.time()
+            self.game.do_solve_step()
+            self.total_time_spent_solving += time.time()
+        else:
+            self.at_puzzle += 1
+            if self.at_puzzle >= self.total_puzzle_amount:
+                print(f"Total time spent solving puzzles was: {self.total_time_spent_solving} seconds")
+            else:
+                self.game = Sudoku(True, self.at_puzzle)
 
     def render(self):
         self.screen.fill(self.background_colour)
