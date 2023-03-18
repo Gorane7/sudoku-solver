@@ -1,5 +1,6 @@
 import pygame
 import random
+import time
 
 
 class Sudoku:
@@ -19,6 +20,61 @@ class Sudoku:
                     self.data[y][x] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
                 else:
                     self.data[y][x] = int(self.data[y][x])
+        self.counter = 0
+
+    def do_horizontal_based_eliminiation(self):
+        for y in range(len(self.data)):
+            in_row = set()
+            for x in range(len(self.data[y])):
+                if isinstance(self.data[y][x], int):
+                    in_row.add(self.data[y][x])
+            for x in range(len(self.data[y])):
+                if isinstance(self.data[y][x], list):
+                    for el in in_row:
+                        if el in self.data[y][x]:
+                            self.data[y][x].remove(el)
+
+    def do_vertical_based_eliminiation(self):
+        for x in range(len(self.data[0])):
+            in_column = set()
+            for y in range(len(self.data)):
+                if isinstance(self.data[y][x], int):
+                    in_column.add(self.data[y][x])
+            for y in range(len(self.data)):
+                if isinstance(self.data[y][x], list):
+                    for el in in_column:
+                        if el in self.data[y][x]:
+                            self.data[y][x].remove(el)
+
+    def do_box_based_elimination(self):
+        for yb in range(3):
+            for xb in range(3):
+                in_box = set()
+                for y in range(3):
+                    for x in range(3):
+                        if isinstance(self.data[yb * 3 + y][xb * 3 + x], int):
+                            in_box.add(self.data[yb * 3 + y][xb * 3 + x])
+                for y in range(3):
+                    for x in range(3):
+                        if isinstance(self.data[yb * 3 + y][xb * 3 + x], list):
+                            for el in in_box:
+                                if el in self.data[yb * 3 + y][xb * 3 + x]:
+                                    self.data[yb * 3 + y][xb * 3 + x].remove(el)
+
+    def do_collapse(self):
+        for y in range(len(self.data)):
+            for x in range(len(self.data[y])):
+                if isinstance(self.data[y][x], list) and len(self.data[y][x]) == 1:
+                    self.data[y][x] = self.data[y][x][0]
+
+    def do_solve_step(self):
+        possibilites = []
+        possibilites.append(self.do_horizontal_based_eliminiation)
+        possibilites.append(self.do_vertical_based_eliminiation)
+        possibilites.append(self.do_box_based_elimination)
+        possibilites.append(self.do_collapse)
+        possibilites[self.counter % len(possibilites)]()
+        self.counter += 1
 
 
 class GUI:
@@ -44,17 +100,26 @@ class GUI:
             self.get_input()
             self.compute()
             self.render()
+            time.sleep(0.5)
 
     def get_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.ESCAPE:
+                if event.key == pygame.QUIT:
                     self.running = False
+                if event.key == pygame.K_h:
+                    self.game.do_horizontal_based_eliminiation()
+                if event.key == pygame.K_v:
+                    self.game.do_vertical_based_eliminiation()
+                if event.key == pygame.K_b:
+                    self.game.do_box_based_elimination()
+                if event.key == pygame.K_c:
+                    self.game.do_collapse()
 
     def compute(self):
-        pass
+        self.game.do_solve_step()
 
     def render(self):
         self.screen.fill(self.background_colour)
